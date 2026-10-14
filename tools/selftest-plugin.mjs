@@ -24,11 +24,11 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { apply } from '../index.js';
-import { PACKAGE_ROOT, VENDOR_ROOT, perform, status, systemdUnitPath } from '../lib/desktop-entry.js';
+import { PACKAGE_ROOT, VENDOR_ROOT, perform, status, systemdInstallPath, systemdUnitPath } from '../lib/desktop-entry.js';
 
 // Redirect the installer before anything can act, and put it back afterwards.
 const sandbox = await mkdtemp(join(tmpdir(), 'dsh-desktop-entry-selftest-'));
@@ -43,7 +43,7 @@ const restored = Object.fromEntries(REDIRECTED.map((key) => [key, process.env[ke
 process.env.DSH_WEB_PREFIX = join(sandbox, 'prefix');
 process.env.XDG_DATA_HOME = join(sandbox, 'share');
 process.env.DSH_WEB_DESKTOP_DIR = join(sandbox, 'Desktop');
-process.env.DSH_WEB_SYSTEMD_UNIT_DIR = join(sandbox, 'systemd');
+process.env.DSH_WEB_SYSTEMD_UNIT_DIR = join(sandbox, 'config', 'systemd', 'user');
 process.env.XDG_CONFIG_HOME = join(sandbox, 'config');
 
 let pass = 0;
@@ -225,8 +225,63 @@ try {
     await ACTION.handler(makeRequest({ method: 'POST', headers: jsonHeaders, body: JSON.stringify({ action: 'status', systemd: true }) }), res);
     const payload = JSON.parse(res.body);
     check('a boolean systemd flag is accepted', [res.statusCode, payload.ok], [200, true]);
-    ok('status reports the resident-service fact', typeof payload.details?.systemd?.present === 'boolean');
-    ok('the resident unit path is the redirected one', payload.details.systemd.path.startsWith(sandbox), payload.details.systemd.path.replace(sandbox, '<sandbox>'));
+    const unit = payload.details?.systemd ?? {};
+    check('status reports the whole unit state', Object.keys(unit).sort(), [
+      'active', 'enabled', 'installPath', 'installPresent',
+      'managerReachable', 'path', 'pathMismatch', 'present', 'resident', 'unit',
+    ]);
+    ok('both unit paths stay inside the sandbox', unit.path.startsWith(sandbox) && unit.installPath.startsWith(sandbox));
+    check(
+      'an absent unit file is not residency, and the manager is not asked',
+      [unit.present, unit.resident, unit.managerReachable, unit.enabled, unit.active],
+      [false, false, null, null, null],
+    );
+  }
+
+  console.log('\n== launcher vs installer unit paths ==');
+  {
+    const aligned = join(sandbox, 'config', 'systemd', 'user', 'dsh-web.service');
+    check('the sandbox aligns both unit paths', [systemdUnitPath(), systemdInstallPath()], [aligned, aligned]);
+
+    // With nothing on disk and the paths aligned, there is nothing to warn about.
+    check('an uninstalled unit adds no note', /note:/.test((await perform('status')).message), false);
+
+    // Now diverge *first*, then let the installer's own path hold the file. In the
+    // aligned case those are the same path, so the situation cannot be expressed at
+    // all — a unit that exists and can never make anything resident.
+    const installerPath = systemdInstallPath();
+    const previousUnitFile = process.env.DSH_WEB_SYSTEMD_UNIT_FILE;
+    process.env.DSH_WEB_SYSTEMD_UNIT_FILE = join(sandbox, 'elsewhere', 'dsh-web.service');
+    await mkdir(dirname(installerPath), { recursive: true });
+    await writeFile(installerPath, '# sandbox placeholder, not a real unit\n');
+    const invisible = await status();
+    check(
+      'a unit the launcher cannot see is not residency',
+      [invisible.systemd.pathMismatch, invisible.systemd.installPresent, invisible.systemd.present, invisible.systemd.resident],
+      [true, true, false, false],
+    );
+    ok(
+      'the summary names the path the launcher actually reads',
+      /but the launcher reads/.test((await perform('status')).message),
+    );
+
+    // Point the launcher at that file: this is the opt-in, so the user manager is
+    // consulted and residency follows its answer rather than the file's existence.
+    process.env.DSH_WEB_SYSTEMD_UNIT_FILE = installerPath;
+    const optedIn = await status();
+    const asked = optedIn.systemd.managerReachable === true;
+    check(
+      'residency follows the reachable user manager, not the file alone',
+      [optedIn.systemd.present, optedIn.systemd.pathMismatch, optedIn.systemd.resident],
+      [true, false, asked],
+    );
+    check(
+      'enabled and active are reported only when the manager answered',
+      [optedIn.systemd.enabled === null, optedIn.systemd.active === null],
+      [!asked, !asked],
+    );
+    if (previousUnitFile === undefined) delete process.env.DSH_WEB_SYSTEMD_UNIT_FILE;
+    else process.env.DSH_WEB_SYSTEMD_UNIT_FILE = previousUnitFile;
   }
 
   console.log('\n== agent tool ==');

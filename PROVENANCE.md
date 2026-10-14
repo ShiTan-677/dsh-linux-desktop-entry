@@ -11,6 +11,24 @@ repository `linux-dsh-web-entry`, taken at:
 
 The sibling's documentation is deliberately not copied; see [The payload](#the-payload).
 
+## Upstream state at the last check
+
+| | |
+| --- | --- |
+| Payload taken from | `d2c81c16` |
+| Upstream `main` at the last check | `45d42fa` — documentation only, payload byte-identical |
+
+The parity check compares content, not commits, so on its own it cannot tell you that upstream
+has merely advanced with documentation. To see what moved, diff the payload paths:
+
+```sh
+git -C ../linux-dsh-web-entry diff --stat d2c81c16..HEAD -- \
+  install.sh bin share tools/compose-icon.py tools/selftest.sh VERSION LICENSE .gitignore
+```
+
+When that diff is empty, this table's second row is the only thing to update. When it is not,
+re-vendor the payload and move the first row to the commit it came from.
+
 ## Why a copy instead of a dependency
 
 The two repositories are deliberately independent. Each one stands on its own: neither breaks

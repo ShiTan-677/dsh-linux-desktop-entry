@@ -62,9 +62,9 @@ and waits for a click.
 ### Settings → Desktop entry
 
 One page that reports the state and offers the actions: whether each installed file is
-present, whether anything is listening on the port, and the path of the resident unit when
-one exists. Buttons: **Install** (or **Reinstall** to repair), **Uninstall**, **Open in app
-window**, **Refresh**.
+present, whether anything is listening on the port, and what the resident unit is really
+doing — its path plus `is-enabled` / `is-active`, or the reason it is not in use. Buttons:
+**Install** (or **Reinstall** to repair), **Uninstall**, **Open in app window**, **Refresh**.
 
 ### `desktop_entry` agent tool
 
@@ -96,6 +96,14 @@ double-click and costs nothing when idle. Pick per machine.
 Uninstall stops and removes the unit as well, so removing the plugin's desktop entry never
 leaves a server running behind you.
 
+If you move the unit, move it for both surfaces: the installer writes it under
+`DSH_WEB_SYSTEMD_UNIT_DIR`, while the launcher only reads `DSH_WEB_SYSTEMD_UNIT_FILE`. When
+the two disagree, the page says so and opening still falls back to a terminal window — a unit
+file the launcher never reads is not a resident service.
+
+A unit file is also not enough on its own: the launcher needs a reachable `systemd --user`
+manager, which is why `status` reports `is-enabled` / `is-active` instead of file existence.
+
 ## The vendored shell kit
 
 `vendor/linux-dsh-web-entry/` is a verbatim copy of the
@@ -115,7 +123,7 @@ clone skips that comparison and says so.
 ## Tests
 
 ```sh
-node tools/selftest-plugin.mjs     # 50 checks: this plugin's surface
+node tools/selftest-plugin.mjs     # 57 checks: this plugin's surface
 vendor/linux-dsh-web-entry/tools/selftest.sh   # 36 checks: the vendored shell kit
 ```
 

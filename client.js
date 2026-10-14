@@ -44,6 +44,7 @@ window.__ModuleLoader__.load({
       .dsh-desktop-entry__message { font-size: 12px; line-height: 1.5; margin: 0; white-space: pre-wrap; color: var(--dsw-alias-label-secondary); }
       .dsh-desktop-entry__message--bad { color: var(--dsw-alias-state-error-primary); }
       .dsh-desktop-entry__message--ok { color: var(--dsw-alias-state-success-primary); }
+      .dsh-desktop-entry__message--warn { color: var(--dsw-alias-state-warn-primary); }
       .dsh-desktop-entry__toggle { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; line-height: 1.5; color: var(--dsw-alias-label-primary); cursor: pointer; }
       .dsh-desktop-entry__toggle input { margin: 1px 0 0; }
       .dsh-desktop-entry__toggle--disabled { cursor: default; opacity: 0.7; }
@@ -63,6 +64,25 @@ window.__ModuleLoader__.load({
         throw new Error(payload && payload.message ? payload.message : `request failed (HTTP ${response.status})`);
       }
       return payload;
+    }
+
+    /** The unit's real state, not just whether a file is there. */
+    function systemdSummary(systemd) {
+      if (!systemd.present) return `none at ${systemd.path}`;
+      if (systemd.managerReachable === false) return `${systemd.path} — no user manager reachable`;
+      return `${systemd.path} — ${systemd.enabled ?? 'unknown'}, ${systemd.active ?? 'unknown'}`;
+    }
+
+    /** Cases where a unit file exists but the launcher will not use it. */
+    function systemdNotes(systemd) {
+      if (systemd.resident) return [];
+      if (systemd.present) {
+        return ['A unit file exists but no user manager is reachable, so opening still starts a terminal window.'];
+      }
+      if (systemd.installPresent) {
+        return [`The installer wrote ${systemd.installPath}, but the launcher reads ${systemd.path}. Set DSH_WEB_SYSTEMD_UNIT_FILE to the installer's path so opening uses the service.`];
+      }
+      return [];
     }
 
     function DesktopEntrySection() {
@@ -138,15 +158,23 @@ window.__ModuleLoader__.load({
         children.push(h('p', { className: 'dsh-desktop-entry__text', key: 'server' },
           snapshot.listening
             ? `A server is listening on port ${snapshot.port} (HTTP ${snapshot.httpStatus}).`
-            : `Nothing is listening on port ${snapshot.port}; opening starts one in a terminal window.`));
+            : snapshot.systemd.resident
+              ? `Nothing is listening on port ${snapshot.port}; opening starts the systemd unit.`
+              : `Nothing is listening on port ${snapshot.port}; opening starts one in a terminal window.`));
         children.push(h('dl', { className: 'dsh-desktop-entry__paths', key: 'paths' }, [
           ...PATH_LABELS.map(([key, text]) => h('div', { className: 'dsh-desktop-entry__path', key },
             h('dt', null, text),
             h('dd', { 'data-missing': String(snapshot.present[key] !== true) }, snapshot.paths[key]))),
           h('div', { className: 'dsh-desktop-entry__path', key: 'systemd' },
-            h('dt', null, 'Resident'),
-            h('dd', { 'data-missing': String(snapshot.systemd.present !== true) }, snapshot.systemd.path)),
+            h('dt', null, 'Service unit'),
+            h('dd', { 'data-missing': String(snapshot.systemd.present !== true) }, systemdSummary(snapshot.systemd))),
         ]));
+        systemdNotes(snapshot.systemd).forEach((note, index) => {
+          children.push(h('p', {
+            className: 'dsh-desktop-entry__message dsh-desktop-entry__message--warn',
+            key: `systemd-note-${index}`,
+          }, note));
+        });
         children.push(h('label', {
           className: `dsh-desktop-entry__toggle${busy ? ' dsh-desktop-entry__toggle--disabled' : ''}`,
           key: 'systemd-toggle',

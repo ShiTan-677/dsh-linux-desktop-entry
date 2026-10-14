@@ -55,9 +55,9 @@ plugin_manager install_bundle /absolute/path/to/dsh-linux-desktop-entry
 
 ### 设置 → 桌面入口
 
-一个页面报告状态并提供操作：每个已安装文件是否存在、端口上是否有服务在监听、存在常驻单元时
-给出其路径。按钮：**安装**（已安装时为**重新安装**，用于修复）、**卸载**、
-**用应用窗口打开**、**刷新**。
+一个页面报告状态并提供操作：每个已安装文件是否存在、端口上是否有服务在监听，以及常驻单元的
+**真实**状态——路径加上 `is-enabled` / `is-active`，或者它为何没被使用。按钮：**安装**
+（已安装时为**重新安装**，用于修复）、**卸载**、**用应用窗口打开**、**刷新**。
 
 ### `desktop_entry` agent 工具
 
@@ -87,6 +87,13 @@ plugin_manager install_bundle /absolute/path/to/dsh-linux-desktop-entry
 
 卸载会同时停止并移除该单元，因此卸载插件的桌面入口不会留下一个在背后运行的服务。
 
+如果你要挪动单元，请为两个面一起挪：安装器写到 `DSH_WEB_SYSTEMD_UNIT_DIR`，而启动器只读
+`DSH_WEB_SYSTEMD_UNIT_FILE`。两者不一致时，页面会明确指出来，且打开时仍会退回终端窗口
+——一个启动器从不读取的单元文件不是常驻服务。
+
+只有一个单元文件也不够：启动器还需要可达的 `systemd --user` 管理器，所以 `status` 报告的是
+`is-enabled` / `is-active`，而不是文件是否存在。
+
 ## vendor 的 shell 套件
 
 `vendor/linux-dsh-web-entry/` 是
@@ -104,7 +111,7 @@ Host 半侧运行其中的 `install.sh` 与 `bin/dsh-web-open.sh`。
 ## 测试
 
 ```sh
-node tools/selftest-plugin.mjs     # 50 项：本插件的表面
+node tools/selftest-plugin.mjs     # 57 项：本插件的表面
 vendor/linux-dsh-web-entry/tools/selftest.sh   # 36 项：vendor 的 shell 套件
 ```
 
