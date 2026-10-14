@@ -90,20 +90,21 @@ plugin_manager install_bundle /absolute/path/to/dsh-linux-desktop-entry
 ## vendor 的 shell 套件
 
 `vendor/linux-dsh-web-entry/` 是
-[linux-dsh-web-entry](https://github.com/ShiTan-677/linux-dsh-web-entry) 已跟踪文件树的
-逐字节副本。Host 半侧运行其中的 `install.sh` 与 `bin/dsh-web-open.sh`。
+[linux-dsh-web-entry](https://github.com/ShiTan-677/linux-dsh-web-entry) **运行时载荷**的
+逐字节副本：安装脚本、启动器、两个模板、图标合成脚本、载荷自带的自检，以及许可证。
+Host 半侧运行其中的 `install.sh` 与 `bin/dsh-web-open.sh`。
 
 选择两个仓库而非一个，是为了让各自独立：任何一个未发布、不可用或被移动，都不会影响另一个。
 独立的代价是漂移，所以漂移被做成**可检测**而不是只写在文档里——只要存在同源的
-`../linux-dsh-web-entry` 检出，`tools/selftest-plugin.mjs` 就会比对 vendor 树，任何差异都
-会导致失败；独立 clone 则跳过该比对并明确说明。
+`../linux-dsh-web-entry` 检出，`tools/selftest-plugin.mjs` 就会逐项核对每个载荷文件：必须存在
+且逐字节一致，且副本中不得出现清单之外的文件；独立 clone 则跳过该比对并明确说明。
 
 `PROVENANCE.md` 记录了上游 commit、版本，以及重新 vendor 意味着什么。
 
 ## 测试
 
 ```sh
-node tools/selftest-plugin.mjs     # 49 项：本插件的表面
+node tools/selftest-plugin.mjs     # 50 项：本插件的表面
 vendor/linux-dsh-web-entry/tools/selftest.sh   # 36 项：vendor 的 shell 套件
 ```
 

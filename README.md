@@ -99,21 +99,23 @@ leaves a server running behind you.
 ## The vendored shell kit
 
 `vendor/linux-dsh-web-entry/` is a verbatim copy of the
-[linux-dsh-web-entry](https://github.com/ShiTan-677/linux-dsh-web-entry) tracked tree. The
-Host half runs its `install.sh` and `bin/dsh-web-open.sh`.
+[linux-dsh-web-entry](https://github.com/ShiTan-677/linux-dsh-web-entry) runtime payload: the
+installer, the launcher, both templates, the icon composer, the payload's own self-test, and
+the license. The Host half runs its `install.sh` and `bin/dsh-web-open.sh`.
 
 Two repositories were chosen over one so each stands alone: neither breaks when the other is
 unpublished, unavailable, or moved. The price of that independence is drift, so it is made
-detectable rather than merely documented — `tools/selftest-plugin.mjs` compares the vendored
-tree against the sibling checkout at `../linux-dsh-web-entry` whenever it exists, and fails on
-any difference. A standalone clone skips that comparison and says so.
+detectable rather than merely documented — `tools/selftest-plugin.mjs` checks every payload file
+against the sibling checkout at `../linux-dsh-web-entry` whenever it exists: each must be
+present and byte-identical, and nothing outside the list may appear in the copy. A standalone
+clone skips that comparison and says so.
 
 `PROVENANCE.md` records the upstream commit and version, and what re-vendoring means.
 
 ## Tests
 
 ```sh
-node tools/selftest-plugin.mjs     # 49 checks: this plugin's surface
+node tools/selftest-plugin.mjs     # 50 checks: this plugin's surface
 vendor/linux-dsh-web-entry/tools/selftest.sh   # 36 checks: the vendored shell kit
 ```
 

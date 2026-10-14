@@ -291,19 +291,34 @@ try {
   check('nothing is left installed', (await status()).installed, false);
 
   console.log('\n== vendored copy vs upstream ==');
+  // The vendored payload is the runtime kit, not the shell project's documentation.
+  // Comparing prose byte-for-byte would fail on every upstream README edit, which is
+  // noise; a change to any file below is the drift that actually matters, and listing
+  // the payload catches an upstream *addition* that the copy never picked up.
+  const VENDORED_PAYLOAD = [
+    '.gitignore',
+    'LICENSE',
+    'VERSION',
+    'install.sh',
+    'bin/dsh-web-open.sh',
+    'share/dsh-web.desktop.in',
+    'share/dsh-web.service.in',
+    'tools/compose-icon.py',
+    'tools/selftest.sh',
+  ];
   const upstream = join(dirname(PACKAGE_ROOT), 'linux-dsh-web-entry');
   if (!existsSync(join(upstream, '.git'))) {
     console.log('skip: no sibling checkout at ../linux-dsh-web-entry (this is a standalone clone)');
   } else {
-    const vendoredFiles = await listFiles(VENDOR_ROOT);
+    check('the vendored tree is exactly the payload', await listFiles(VENDOR_ROOT), [...VENDORED_PAYLOAD].sort());
     const upstreamFiles = await listFiles(upstream);
-    check('the vendored tree lists exactly the upstream files', vendoredFiles, upstreamFiles);
+    check('every payload file still exists upstream', VENDORED_PAYLOAD.filter((file) => !upstreamFiles.includes(file)), []);
     const differing = [];
-    for (const file of vendoredFiles) {
+    for (const file of VENDORED_PAYLOAD) {
       if (!upstreamFiles.includes(file)) continue;
       if ((await digest(join(VENDOR_ROOT, file))) !== (await digest(join(upstream, file)))) differing.push(file);
     }
-    check('no vendored file differs from upstream', differing, []);
+    check('no payload file differs from upstream', differing, []);
   }
 } finally {
   for (const [key, value] of Object.entries(restored)) {
