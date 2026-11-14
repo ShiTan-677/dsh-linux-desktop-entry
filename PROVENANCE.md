@@ -16,7 +16,7 @@ The sibling's documentation is deliberately not copied; see [The payload](#the-p
 | | |
 | --- | --- |
 | Payload taken from | `badd168` |
-| Upstream `main` at the last check | `badd168` — the payload itself |
+| Upstream `main` at the last check | `23524b3` — a documentation-only commit, payload byte-identical |
 
 The parity check compares content, not commits, so on its own it cannot tell you that upstream
 has merely advanced with documentation. To see what moved, diff the payload paths:
