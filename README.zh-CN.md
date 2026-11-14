@@ -112,7 +112,7 @@ Host 半侧运行其中的 `install.sh` 与 `bin/dsh-web-open.sh`。
 
 ```sh
 node tools/selftest-plugin.mjs     # 57 项：本插件的表面
-vendor/linux-dsh-web-entry/tools/selftest.sh   # 36 项：vendor 的 shell 套件
+vendor/linux-dsh-web-entry/tools/selftest.sh   # 41 项：vendor 的 shell 套件
 ```
 
 插件自检用假的 Cordis context 直接驱动 Host 半侧的 HTTP 处理器、agent 工具与命令，因此在没有

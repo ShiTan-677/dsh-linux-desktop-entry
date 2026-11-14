@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — 2026-11-14 (patch)
+
+- Re-vendor `linux-dsh-web-entry` 0.1.1: the launcher no longer hands its start-lock
+  descriptor to the browser or the terminal it spawns, and truncates the shared launch log
+  only after taking the lock. On the real desktop the leaked lock showed up as a leftover
+  `chrome` holding `~/.local/state/dsh-web/start.lock`, which made every later launch time
+  out waiting for a token.
+- The vendored `tools/selftest.sh` is now 41 checks (was 36).
+
 ## 0.1.0 — 2026-10-14 (public preview)
 
 - Add a DSH bundle that manages the [Linux DSH Web Entry](https://github.com/ShiTan-677/linux-dsh-web-entry)

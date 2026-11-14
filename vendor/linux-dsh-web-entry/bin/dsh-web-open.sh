@@ -102,10 +102,13 @@ open_browser() {
     log "would open: $target"
     return 0
   fi
+  # The browser outlives this script, so hand it no copy of the start lock
+  # (fd 9): an inherited lock stays held for the life of the window, and the
+  # next launch then waits for a token that never appears.
   if command -v "$BROWSER" >/dev/null 2>&1; then
-    setsid "$BROWSER" --app="$target" >/dev/null 2>&1 &
+    setsid "$BROWSER" --app="$target" >/dev/null 2>&1 9>&- &
   else
-    setsid xdg-open "$target" >/dev/null 2>&1 &
+    setsid xdg-open "$target" >/dev/null 2>&1 9>&- &
   fi
 }
 
@@ -117,10 +120,12 @@ spawn_terminal() {
     log "would run in a terminal window: $cmd"
     return 0
   fi
+  # Same rule as open_browser(): the spawned terminal must not inherit the
+  # start lock, or the lock outlives the launcher that owns it.
   if command -v gnome-terminal >/dev/null 2>&1; then
-    gnome-terminal --window --title="dsh web — $URL" -- bash -lc "$cmd"
+    gnome-terminal --window --title="dsh web — $URL" -- bash -lc "$cmd" 9>&-
   elif command -v x-terminal-emulator >/dev/null 2>&1; then
-    x-terminal-emulator -e bash -lc "$cmd"
+    x-terminal-emulator -e bash -lc "$cmd" 9>&-
   else
     return 1
   fi
@@ -215,10 +220,14 @@ wait_for_token() {
   done
   notify "DSH Web" "The server did not report a URL within ${START_TIMEOUT}s; see the terminal window."
   log "timed out waiting for the token URL in $LAUNCH_LOG"
+  log "if no launch window is showing an error, a stale start lock is the likely cause: rm -f $STATE_DIR/start.lock"
   return 1
 }
 
 serve() {
+  # --serve is the terminal window's and the unit's entry point; drop a start
+  # lock inherited from whoever spawned it before the server starts.
+  exec 9>&- 2>/dev/null || true
   load_node_env
   if ! resolve_dsh; then
     printf 'dsh-web: no dsh, npx, or cached @deepseek-ai/dsh found on PATH\n' >&2
@@ -268,13 +277,16 @@ main() {
 
   log "nothing is listening on port $PORT; starting dsh web"
   mkdir -p "$STATE_DIR"
-  : > "$LAUNCH_LOG"
+  # Take the start lock before touching the shared log: the lock owner owns the
+  # log, so a second launcher cannot truncate the token line the first one is
+  # waiting for.
   exec 9>"$STATE_DIR/start.lock"
   if command -v flock >/dev/null 2>&1 && ! flock -n 9; then
     log "another launcher is already starting the server; waiting for its URL"
     wait_for_token
     return $?
   fi
+  : > "$LAUNCH_LOG"
   spawn_terminal || die "Could not open a terminal window (install gnome-terminal or x-terminal-emulator)."
   if [ "$DRY_RUN" = "1" ]; then
     log "dry run: not waiting for the token URL"

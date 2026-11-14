@@ -19,6 +19,8 @@ cleanup() {
   for pid in ${SRV_PIDS[@]+"${SRV_PIDS[@]}"}; do kill "$pid" 2>/dev/null; done
   pkill -f "$TMP/stub/dsh" 2>/dev/null
   pkill -f "$TMP/stub/http401.py" 2>/dev/null
+  pkill -f "$TMP/stub/slow-browser" 2>/dev/null
+  pkill -f "$TMP/stub-term/gnome-terminal" 2>/dev/null
   rm -rf "$TMP"
 }
 trap cleanup EXIT
@@ -61,6 +63,7 @@ run_launcher() { # run_launcher <port> [extra launcher args...]
   shift
   DSH_WEB_PORT="$port" \
     DSH_WEB_DRY_RUN=1 \
+    DSH_WEB_SYSTEMD_UNIT_FILE="$TMP/no-such-unit.service" \
     XDG_STATE_HOME="$TMP/state" \
     "$LAUNCHER" "$@" 2>&1
 }
@@ -179,6 +182,67 @@ done
 kill "$serve_pid" 2>/dev/null
 check "serve passes web --port --no-open" "stub dsh argv: web --port 3080 --no-open" "$(cat "$TMP/serve.out")"
 check "serve tees the server console to the log" "token=stubserve" "$(cat "$TMP/state/dsh-web/launch.log")"
+
+printf '\n== the start lock stays out of long-lived children ==\n'
+# Regression for a leaked flock: a browser or terminal spawned while the
+# launcher held fd 9 kept the lock for the life of that window, so the next
+# launch waited for a token that could never appear.
+LOCK_STATE="$TMP/lock-state"
+mkdir -p "$LOCK_STATE/dsh-web" "$TMP/stub-term"
+cat >"$TMP/stub/slow-browser" <<EOF
+#!/usr/bin/env bash
+if [ -e "/proc/\$\$/fd/9" ]; then printf 'leaked\n'; else printf 'clean\n'; fi >"$TMP/browser.fd9"
+sleep 5
+EOF
+cat >"$TMP/stub-term/gnome-terminal" <<EOF
+#!/usr/bin/env bash
+if [ -e "/proc/\$\$/fd/9" ]; then printf 'leaked\n'; else printf 'clean\n'; fi >"$TMP/terminal.fd9"
+sleep 5
+EOF
+chmod +x "$TMP/stub/slow-browser" "$TMP/stub-term/gnome-terminal"
+
+DSH_WEB_LIB_ONLY=1 \
+  DSH_WEB_DRY_RUN=0 \
+  DSH_WEB_BROWSER="$TMP/stub/slow-browser" \
+  XDG_STATE_HOME="$LOCK_STATE" \
+  bash -c '. "$1"; mkdir -p "$STATE_DIR"; exec 9>"$STATE_DIR/start.lock"; flock -n 9 || exit 9; open_browser "http://127.0.0.1:38099/?token=lock"; sleep 1' \
+  bash "$LAUNCHER" >/dev/null 2>&1
+wait_for_file "$TMP/browser.fd9" || true
+check_eq "a browser spawned under the lock inherits no lock fd" "clean" "$(cat "$TMP/browser.fd9" 2>/dev/null)"
+if flock -n "$LOCK_STATE/dsh-web/start.lock" true 2>/dev/null; then
+  check "the launcher releases the start lock when it exits" "ok" "ok"
+else
+  check "the launcher releases the start lock when it exits" "ok" "still held"
+fi
+pkill -f "$TMP/stub/slow-browser" 2>/dev/null
+
+DSH_WEB_LIB_ONLY=1 \
+  DSH_WEB_DRY_RUN=0 \
+  PATH="$TMP/stub-term:$PATH" \
+  XDG_STATE_HOME="$LOCK_STATE" \
+  bash -c '. "$1"; mkdir -p "$STATE_DIR"; exec 9>"$STATE_DIR/start.lock"; flock -n 9 || exit 9; spawn_terminal; sleep 1' \
+  bash "$LAUNCHER" >/dev/null 2>&1
+wait_for_file "$TMP/terminal.fd9" || true
+check_eq "a spawned terminal inherits no lock fd" "clean" "$(cat "$TMP/terminal.fd9" 2>/dev/null)"
+pkill -f "$TMP/stub-term/gnome-terminal" 2>/dev/null
+
+# The lock winner owns the log; a launcher that lost the race must not truncate
+# the token line the winner is waiting for.
+printf 'dsh web: http://127.0.0.1:38099/?token=waiter (LAN: http://10.0.0.9:38099/?token=waiter)\n' \
+  >"$LOCK_STATE/dsh-web/launch.log"
+flock "$LOCK_STATE/dsh-web/start.lock" -c 'sleep 4' &
+lock_holder=$!
+sleep 0.2
+waiter_out="$(DSH_WEB_PORT=1 \
+  DSH_WEB_DRY_RUN=1 \
+  DSH_WEB_SYSTEMD_UNIT_FILE="$TMP/no-such-unit.service" \
+  DSH_WEB_START_TIMEOUT=2 \
+  XDG_STATE_HOME="$LOCK_STATE" \
+  "$LAUNCHER" 2>&1)"
+kill "$lock_holder" 2>/dev/null
+wait "$lock_holder" 2>/dev/null
+check "a second launcher reports that it is waiting" "another launcher is already starting the server" "$waiter_out"
+check "a waiting launcher leaves the log intact" "token=waiter" "$(cat "$LOCK_STATE/dsh-web/launch.log" 2>/dev/null)"
 
 printf '\n== systemd mode (stub systemctl + journalctl) ==\n'
 PORT_SYS=38082
