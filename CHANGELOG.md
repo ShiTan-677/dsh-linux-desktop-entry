@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.3 — 2026-11-14 (patch)
+
+- Re-vendor `linux-dsh-web-entry` 0.1.3 and export `DSH_WEB_NO_USER_MANAGER=1` for the
+  whole self-test run. 0.1.2's custom-directory guard is inert here because this test
+  redirects `XDG_CONFIG_HOME` together with the unit directory; the explicit opt-out is
+  what keeps the installer away from the live user manager, which had been disabling the
+  real `dsh-web.service` whenever this suite ran.
+- A recording stub `systemctl` now sits first on `PATH`, and the suite asserts the
+  installer never mutates the manager (59 checks, was 57). The vendored shell suite is
+  46 checks (was 43).
+
 ## 0.1.2 — 2026-11-14 (patch)
 
 - Re-vendor `linux-dsh-web-entry` 0.1.2: `install.sh --uninstall` no longer reaches the

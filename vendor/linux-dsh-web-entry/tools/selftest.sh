@@ -383,5 +383,29 @@ else
 fi
 check "custom-dir uninstall says it skipped the manager" "custom unit directory" "$uninstall_out"
 
+printf '\n== the opt-out keeps the live manager out ==\n'
+# The plugin surface redirects XDG_CONFIG_HOME together with the unit directory, so an
+# aligned pair makes the custom-directory guard inert. systemctl --user is D-Bus, not a
+# file path: only the explicit opt-out keeps such a caller away from the live manager.
+OPTOUT_CONFIG="$TMP/optout-config"
+mkdir -p "$OPTOUT_CONFIG/systemd/user"
+: >"$OPTOUT_CONFIG/systemd/user/dsh-web.service"
+rm -f "$TMP/systemctl-uninstall.log"
+optout_out="$(DSH_WEB_PREFIX="$TMP/optout-prefix" \
+  XDG_DATA_HOME="$TMP/optout-share" \
+  DSH_WEB_DESKTOP_DIR="$TMP/optout-Desktop" \
+  DSH_WEB_SYSTEMD_UNIT_DIR="$OPTOUT_CONFIG/systemd/user" \
+  XDG_CONFIG_HOME="$OPTOUT_CONFIG" \
+  DSH_WEB_NO_USER_MANAGER=1 \
+  PATH="$TMP/stub-manager:$PATH" \
+  "$REPO_DIR/install.sh" --uninstall 2>&1)"
+if [ -s "$TMP/systemctl-uninstall.log" ]; then
+  check "the opt-out keeps the manager out of an aligned sandbox" "clean" "$(cat "$TMP/systemctl-uninstall.log")"
+else
+  check "the opt-out keeps the manager out of an aligned sandbox" "clean" "clean"
+fi
+check "the opt-out is reported" "DSH_WEB_NO_USER_MANAGER=1" "$optout_out"
+test ! -e "$OPTOUT_CONFIG/systemd/user/dsh-web.service"; ok_if "the opt-out uninstall removes the unit file" $?
+
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

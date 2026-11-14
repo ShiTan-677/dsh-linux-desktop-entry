@@ -14,11 +14,12 @@
  * redirect is deliberate rather than incidental: the tests below really do run
  * `install.sh`.
  *
- * For the same reason this test never asks the installer for `--systemd`. That
- * path ends in `systemctl --user`, which resolves the unit *by name* through the
- * live user manager and could therefore stop a service this test did not create.
- * The option's plumbing is checked here; its effect on a real user manager is
- * left to a human running it on purpose.
+ * One thing file redirects cannot move is D-Bus: `systemctl --user` resolves a unit
+ * by name through the live user manager, which no environment variable can redirect.
+ * The installer therefore honours `DSH_WEB_NO_USER_MANAGER=1`, and this test exports
+ * it for the whole run together with a stub `systemctl` on `PATH` that records any
+ * call the installer should not be making. Acting on a real user manager is left to
+ * a human running the install on purpose.
  *
  *   node tools/selftest-plugin.mjs
  */
@@ -38,6 +39,8 @@ const REDIRECTED = [
   'DSH_WEB_DESKTOP_DIR',
   'DSH_WEB_SYSTEMD_UNIT_DIR',
   'XDG_CONFIG_HOME',
+  'DSH_WEB_NO_USER_MANAGER',
+  'PATH',
 ];
 const restored = Object.fromEntries(REDIRECTED.map((key) => [key, process.env[key]]));
 process.env.DSH_WEB_PREFIX = join(sandbox, 'prefix');
@@ -45,6 +48,20 @@ process.env.XDG_DATA_HOME = join(sandbox, 'share');
 process.env.DSH_WEB_DESKTOP_DIR = join(sandbox, 'Desktop');
 process.env.DSH_WEB_SYSTEMD_UNIT_DIR = join(sandbox, 'config', 'systemd', 'user');
 process.env.XDG_CONFIG_HOME = join(sandbox, 'config');
+
+// The installer must not reach the live user manager from this sandbox, and path
+// redirects cannot enforce that: keep a recording stub first on PATH and assert the
+// log stays empty after the install/uninstall cycle.
+const managerStub = join(sandbox, 'manager-stub');
+const managerLog = join(sandbox, 'systemctl.log');
+await mkdir(managerStub, { recursive: true });
+await writeFile(
+  join(managerStub, 'systemctl'),
+  `#!/usr/bin/env bash\nprintf 'systemctl %s\\n' "$*" >> '${managerLog}'\n`,
+  { mode: 0o755 },
+);
+process.env.DSH_WEB_NO_USER_MANAGER = '1';
+process.env.PATH = `${managerStub}:${process.env.PATH}`;
 
 let pass = 0;
 let fail = 0;
@@ -344,6 +361,16 @@ try {
   ok('the status summary agrees with the presence map', /the desktop entry is installed/.test((await perform('status')).message));
   check('uninstall reports success', (await perform('uninstall')).ok, true);
   check('nothing is left installed', (await status()).installed, false);
+
+  console.log('\n== the live user manager stays out ==');
+  ok('the manager opt-out is exported to the installer', process.env.DSH_WEB_NO_USER_MANAGER === '1');
+  // The plugin's own status reporting legitimately reads the manager; only the
+  // installer must never mutate it from this sandbox.
+  const managerCalls = existsSync(managerLog) ? await readFile(managerLog, 'utf8') : '';
+  const mutations = managerCalls
+    .split('\n')
+    .filter((line) => /(?:^|\s)(?:disable|enable|daemon-reload)\b/.test(line));
+  check('the installer never mutated the user manager', mutations, []);
 
   console.log('\n== vendored copy vs upstream ==');
   // The vendored payload is the runtime kit, not the shell project's documentation.

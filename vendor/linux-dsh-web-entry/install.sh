@@ -49,7 +49,13 @@ render_unit() {
 
 # The user manager is a session bus client; without a bus we can still write the
 # unit file, and the user runs daemon-reload/enable themselves.
+#
+# DSH_WEB_NO_USER_MANAGER=1 is the escape hatch for callers that redirect the XDG
+# configuration home into a sandbox (the plugin surface's self-test does exactly that).
+# `systemctl --user` talks to the live manager over D-Bus, which no environment variable
+# can redirect, so comparing paths alone cannot keep a sandboxed run away from it.
 have_user_manager() {
+  [ "${DSH_WEB_NO_USER_MANAGER:-0}" = "1" ] && return 1
   command -v systemctl >/dev/null 2>&1 && systemctl --user list-units >/dev/null 2>&1
 }
 
@@ -70,12 +76,21 @@ install_systemd_unit() {
     return 0
   fi
   if ! have_user_manager; then
-    cat <<EOF
+    if [ "${DSH_WEB_NO_USER_MANAGER:-0}" = "1" ]; then
+      cat <<EOF
+systemd:  DSH_WEB_NO_USER_MANAGER=1, so the user manager was not asked; the unit
+          is installed only. Enable it from your desktop session:
+            systemctl --user daemon-reload
+            systemctl --user enable --now $UNIT_NAME
+EOF
+    else
+      cat <<EOF
 systemd:  no user manager reachable from this shell, so the unit is installed
           but not enabled. Run this from your desktop session:
             systemctl --user daemon-reload
             systemctl --user enable --now $UNIT_NAME
 EOF
+    fi
     return 0
   fi
 
@@ -127,6 +142,9 @@ remove_systemd_unit() {
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   else
     rm -f "$UNIT_PATH"
+    if [ "${DSH_WEB_NO_USER_MANAGER:-0}" = "1" ]; then
+      printf 'systemd:  DSH_WEB_NO_USER_MANAGER=1, so the user manager was not asked\n'
+    fi
   fi
   printf 'removed: %s\n' "$UNIT_PATH"
 }
