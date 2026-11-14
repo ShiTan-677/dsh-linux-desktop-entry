@@ -124,7 +124,7 @@ clone skips that comparison and says so.
 
 ```sh
 node tools/selftest-plugin.mjs     # 57 checks: this plugin's surface
-vendor/linux-dsh-web-entry/tools/selftest.sh   # 41 checks: the vendored shell kit
+vendor/linux-dsh-web-entry/tools/selftest.sh   # 43 checks: the vendored shell kit
 ```
 
 The plugin self-test drives the Host half's HTTP handlers, the agent tool and the command

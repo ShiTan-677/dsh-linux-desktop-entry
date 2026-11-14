@@ -358,15 +358,30 @@ fi
 test -s "$TMP/share/icons/dsh-web.svg"; ok_if "icon file written" $?
 test -x "$TMP/Desktop/dsh-web.desktop"; ok_if "desktop entry is executable" $?
 
+mkdir -p "$TMP/stub-manager"
+cat >"$TMP/stub-manager/systemctl" <<EOF
+#!/usr/bin/env bash
+printf 'systemctl %s\n' "\$*" >>"$TMP/systemctl-uninstall.log"
+exit 0
+EOF
+chmod +x "$TMP/stub-manager/systemctl"
+
 uninstall_out="$(DSH_WEB_PREFIX="$TMP/prefix" \
   XDG_DATA_HOME="$TMP/share" \
   DSH_WEB_DESKTOP_DIR="$TMP/Desktop" \
   DSH_WEB_SYSTEMD_UNIT_DIR="$UNIT_DIR" \
+  PATH="$TMP/stub-manager:$PATH" \
   "$REPO_DIR/install.sh" --uninstall 2>&1)"
 check "uninstall reports the desktop file" "$TMP/Desktop/dsh-web.desktop" "$uninstall_out"
 test ! -e "$TMP/prefix/bin/dsh-web-open.sh"; ok_if "uninstall removes the launcher" $?
 test ! -e "$TMP/share/icons/dsh-web.svg"; ok_if "uninstall removes the icon" $?
 test ! -e "$UNIT_DIR/dsh-web.service"; ok_if "uninstall removes the systemd unit" $?
+if [ -s "$TMP/systemctl-uninstall.log" ]; then
+  check "custom-dir uninstall leaves the user manager alone" "clean" "$(cat "$TMP/systemctl-uninstall.log")"
+else
+  check "custom-dir uninstall leaves the user manager alone" "clean" "clean"
+fi
+check "custom-dir uninstall says it skipped the manager" "custom unit directory" "$uninstall_out"
 
 printf '\n%s passed, %s failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 — 2026-11-14 (patch)
+
+- Re-vendor `linux-dsh-web-entry` 0.1.2: `install.sh --uninstall` no longer reaches the
+  live user manager from a custom unit directory. The plugin self-test uninstalls from a
+  temporary tree, so on a machine with the unit enabled every self-test run used to
+  disable the real `dsh-web.service`; it no longer does.
+- The vendored `tools/selftest.sh` is now 43 checks (was 41).
+
 ## 0.1.1 — 2026-11-14 (patch)
 
 - Re-vendor `linux-dsh-web-entry` 0.1.1: the launcher no longer hands its start-lock

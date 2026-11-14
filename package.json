@@ -1,6 +1,6 @@
 {
   "name": "dsh-linux-desktop-entry",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Install, repair or remove the Linux desktop entrance for the DeepSeek Harness Web GUI from inside the harness, and open the GUI in an app window.",
   "license": "MIT",

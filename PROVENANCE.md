@@ -5,8 +5,8 @@ repository `linux-dsh-web-entry`, taken at:
 
 | Field | Value |
 | --- | --- |
-| Commit | `badd168b2bdcb08718cca2076b5d014ac511852d` |
-| `VERSION` | `0.1.1` |
+| Commit | `f85dd6d4b9a619fd89b275b7ac669aa9a822b0a0` |
+| `VERSION` | `0.1.2` |
 | Vendored on | 2026-11-14 |
 
 The sibling's documentation is deliberately not copied; see [The payload](#the-payload).
@@ -15,14 +15,14 @@ The sibling's documentation is deliberately not copied; see [The payload](#the-p
 
 | | |
 | --- | --- |
-| Payload taken from | `badd168` |
-| Upstream `main` at the last check | `23524b3` — a documentation-only commit, payload byte-identical |
+| Payload taken from | `f85dd6d` |
+| Upstream `main` at the last check | `f85dd6d` — the payload itself |
 
 The parity check compares content, not commits, so on its own it cannot tell you that upstream
 has merely advanced with documentation. To see what moved, diff the payload paths:
 
 ```sh
-git -C ../linux-dsh-web-entry diff --stat badd168..HEAD -- \
+git -C ../linux-dsh-web-entry diff --stat f85dd6d..HEAD -- \
   install.sh bin share tools/compose-icon.py tools/selftest.sh VERSION LICENSE .gitignore
 ```
 

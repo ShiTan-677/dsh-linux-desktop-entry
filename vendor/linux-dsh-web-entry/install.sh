@@ -109,6 +109,18 @@ remove_systemd_unit() {
   if [ ! -e "$UNIT_PATH" ]; then
     return 0
   fi
+  local default_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  if [ "$SYSTEMD_DIR" != "$default_dir" ]; then
+    # Mirror install_systemd_unit(): a custom unit directory is the caller's to
+    # manage. Asking the live user manager here resolves the unit *by name*, so
+    # it would disable a same-named unit in the standard directory instead -
+    # a real side effect on the developer's desktop.
+    rm -f "$UNIT_PATH"
+    printf 'removed: %s\n' "$UNIT_PATH"
+    printf 'systemd:  custom unit directory, so the user manager was not asked;\n'
+    printf '          stop or disable a same-named unit yourself if one exists\n'
+    return 0
+  fi
   if have_user_manager; then
     systemctl --user disable --now "$UNIT_NAME" >/dev/null 2>&1 || true
     rm -f "$UNIT_PATH"
